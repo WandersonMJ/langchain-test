@@ -1,6 +1,6 @@
-import { professionals } from '../mocks/data/professionals';
-import { services } from '../mocks/data/services';
-import { availability } from '../mocks/data/availability';
+import { mockProfessionals } from '../mocks/data/professionals';
+import { mockServices } from '../mocks/data/services';
+import { mockAvailability } from '../mocks/data/availability';
 
 /**
  * Tipos para o estado de agendamento
@@ -45,7 +45,7 @@ export class BookingValidationController {
 
     // 1. Se tem serviço, valida e retorna profissionais que oferecem esse serviço
     if (slots.servico) {
-      const service = services.find(s => s.id === slots.servico);
+      const service = mockServices.find(s => s.id === slots.servico);
 
       if (!service) {
         result.valid = false;
@@ -54,8 +54,8 @@ export class BookingValidationController {
       }
 
       // Filtra profissionais que oferecem esse serviço
-      const availableProfessionals = professionals.filter(prof =>
-        prof.services.some(s => s.id === slots.servico)
+      const availableProfessionals = mockProfessionals.filter(prof =>
+        prof.servicesOffered.includes(slots.servico!)
       );
 
       result.availableOptions!.professionals = availableProfessionals.map(prof => ({
@@ -88,7 +88,7 @@ export class BookingValidationController {
 
     // 2. Se tem profissional, valida e retorna serviços que ele oferece
     if (slots.profissional) {
-      const professional = professionals.find(p => p.id === slots.profissional);
+      const professional = mockProfessionals.find(p => p.id === slots.profissional);
 
       if (!professional) {
         result.valid = false;
@@ -96,7 +96,12 @@ export class BookingValidationController {
         return result;
       }
 
-      result.availableOptions!.services = professional.services.map(s => ({
+      // Busca os serviços que o profissional oferece
+      const professionalServices = mockServices.filter(s =>
+        professional.servicesOffered.includes(s.id)
+      );
+
+      result.availableOptions!.services = professionalServices.map(s => ({
         id: s.id,
         name: s.name,
         price: s.price,
@@ -105,18 +110,16 @@ export class BookingValidationController {
 
       // Se já tem serviço, valida se o profissional oferece
       if (slots.servico) {
-        const professionalOffersService = professional.services.some(
-          s => s.id === slots.servico
-        );
+        const professionalOffersService = professional.servicesOffered.includes(slots.servico);
 
         if (!professionalOffersService) {
           result.valid = false;
-          const service = services.find(s => s.id === slots.servico);
+          const service = mockServices.find(s => s.id === slots.servico);
           result.errors?.push(
             `Profissional ${professional.name} não oferece o serviço ${service?.name}`
           );
           result.suggestions?.push(
-            `Serviços oferecidos por ${professional.name}: ${professional.services
+            `Serviços oferecidos por ${professional.name}: ${professionalServices
               .map(s => s.name)
               .join(', ')}`
           );
@@ -127,47 +130,39 @@ export class BookingValidationController {
 
     // 3. Se tem data e profissional, valida disponibilidade
     if (slots.data && slots.profissional) {
-      const dateAvailability = availability.find(
-        a => a.professionalId === slots.profissional && a.date === slots.data
-      );
+      const professionalAvailability = mockAvailability[slots.profissional];
 
-      if (!dateAvailability) {
+      if (!professionalAvailability || !professionalAvailability[slots.data]) {
         result.valid = false;
         result.errors?.push(
           `Profissional não está disponível na data ${slots.data}`
         );
 
         // Sugere próximas datas disponíveis
-        const nextAvailableDates = availability
-          .filter(a => a.professionalId === slots.profissional && a.date > slots.data!)
-          .map(a => a.date)
-          .slice(0, 3);
+        if (professionalAvailability) {
+          const nextAvailableDates = Object.keys(professionalAvailability)
+            .filter(date => date > slots.data!)
+            .sort()
+            .slice(0, 3);
 
-        if (nextAvailableDates.length > 0) {
-          result.suggestions?.push(
-            `Próximas datas disponíveis: ${nextAvailableDates.join(', ')}`
-          );
+          if (nextAvailableDates.length > 0) {
+            result.suggestions?.push(
+              `Próximas datas disponíveis: ${nextAvailableDates.join(', ')}`
+            );
+          }
         }
 
         return result;
       }
 
       // Retorna horários disponíveis
-      result.availableOptions!.times = dateAvailability.slots
-        .filter(slot => slot.available)
-        .map(slot => slot.time);
+      result.availableOptions!.times = professionalAvailability[slots.data];
 
       // Se já tem horário, valida se está disponível
       if (slots.horario) {
-        const timeSlot = dateAvailability.slots.find(s => s.time === slots.horario);
+        const timeAvailable = professionalAvailability[slots.data].includes(slots.horario);
 
-        if (!timeSlot) {
-          result.valid = false;
-          result.errors?.push(`Horário ${slots.horario} não existe`);
-          return result;
-        }
-
-        if (!timeSlot.available) {
+        if (!timeAvailable) {
           result.valid = false;
           result.errors?.push(`Horário ${slots.horario} não está disponível`);
           result.suggestions?.push(
@@ -240,9 +235,11 @@ export class BookingValidationController {
 
     // Se tem profissional mas não tem serviço, sugere serviços populares
     if (slots.profissional && !slots.servico) {
-      const professional = professionals.find(p => p.id === slots.profissional);
+      const professional = mockProfessionals.find(p => p.id === slots.profissional);
       if (professional) {
-        const topServices = professional.services.slice(0, 3);
+        const topServices = mockServices
+          .filter(s => professional.servicesOffered.includes(s.id))
+          .slice(0, 3);
         suggestions.push(
           `Serviços mais procurados de ${professional.name}: ${topServices
             .map(s => s.name)
@@ -253,8 +250,8 @@ export class BookingValidationController {
 
     // Se tem serviço mas não tem profissional, sugere o melhor avaliado
     if (slots.servico && !slots.profissional) {
-      const availableProfessionals = professionals
-        .filter(prof => prof.services.some(s => s.id === slots.servico))
+      const availableProfessionals = mockProfessionals
+        .filter(prof => prof.servicesOffered.includes(slots.servico!))
         .sort((a, b) => b.rating - a.rating);
 
       if (availableProfessionals.length > 0) {
@@ -268,13 +265,17 @@ export class BookingValidationController {
     // Se tem profissional e serviço mas não tem data, sugere próximas datas
     if (slots.profissional && slots.servico && !slots.data) {
       const today = new Date().toISOString().split('T')[0];
-      const nextDates = availability
-        .filter(a => a.professionalId === slots.profissional && a.date >= today)
-        .map(a => a.date)
-        .slice(0, 3);
+      const professionalAvailability = mockAvailability[slots.profissional];
 
-      if (nextDates.length > 0) {
-        suggestions.push(`Próximas datas disponíveis: ${nextDates.join(', ')}`);
+      if (professionalAvailability) {
+        const nextDates = Object.keys(professionalAvailability)
+          .filter(date => date >= today)
+          .sort()
+          .slice(0, 3);
+
+        if (nextDates.length > 0) {
+          suggestions.push(`Próximas datas disponíveis: ${nextDates.join(', ')}`);
+        }
       }
     }
 

@@ -1,161 +1,283 @@
-# API Express com LangChain e Tool Calling
+# Sistema de Agendamento IA WhatsApp B2B
 
-Uma API REST simples e bem estruturada usando Express.js e LangChain com Tool Calling, seguindo princípios SOLID.
+Sistema de agendamento conversacional com IA que combina LLMs (GPT-4o-mini e Claude 3 Haiku) com validação de regras de negócio em Node.js.
 
-O assistente possui acesso a ferramentas (tools) que permitem consultar informações sobre serviços, profissionais e disponibilidade de horários.
+## 🎯 Arquitetura
 
-## Estrutura do Projeto
+O sistema implementa o padrão descrito em `ideia.txt`:
 
 ```
-langchain-test/
-├── src/
-│   ├── controllers/      # Controladores HTTP (lidam com requisições)
-│   ├── services/         # Lógica de negócio
-│   ├── routes/           # Definição de rotas
-│   ├── interfaces/       # Contratos e tipos TypeScript
-│   ├── config/           # Configuração de tools
-│   ├── mocks/            # Dados e funções mockadas
-│   │   ├── data/         # Dados mockados (serviços, profissionais, etc)
-│   │   └── functions/    # Funções que retornam dados mockados
-│   ├── app.ts            # Configuração do Express
-│   └── server.ts         # Ponto de entrada da aplicação
-├── .env.example          # Exemplo de variáveis de ambiente
-├── tsconfig.json         # Configuração TypeScript
-└── package.json
+User → LLM extrai intenção/slots →
+Controlador Node.js valida regras →
+Retorna opções válidas →
+LLM responde naturalmente
 ```
 
-## Princípios SOLID Aplicados
+### Componentes Principais
 
-- **Single Responsibility**: Cada classe tem uma única responsabilidade
-  - `HealthService`: apenas verifica saúde da aplicação
-  - `LangChainChatService`: apenas processa mensagens com LLM
-  - Controllers: apenas lidam com HTTP
+1. **IntentClassifier**: Classifica a intenção do usuário
+   - `QUERY`: Perguntas informativas (não muda estado)
+   - `BOOK_SLOT`: Ação transacional (avança agendamento)
+   - `CHANGE_MIND`: Cancelar/mudar agendamento
 
-- **Open/Closed**: Fácil adicionar novas rotas sem modificar código existente
+2. **BookingValidationController**: Valida regras de negócio
+   - Profissional ↔ Serviço ↔ Horário ↔ Agenda (interdependentes)
+   - Retorna opções válidas e sugestões inteligentes
 
-- **Dependency Inversion**: Controllers dependem de interfaces, não de implementações concretas
+3. **OrchestrationChatService**: Orquestra o fluxo completo
+   - Separa ações informativas vs transacionais
+   - Mantém estado de agendamento durante conversa
+   - Usa IA para respostas naturais
 
-## Instalação
+4. **SessionManager**: Gerencia contexto da conversa
+   - Histórico de mensagens
+   - Estado de agendamento em andamento
+   - Expiração automática (30 minutos)
 
-1. Clone o repositório
-2. Instale as dependências:
+## 🚀 Instalação
+
 ```bash
+# Instalar dependências
 npm install
-```
 
-3. Configure as variáveis de ambiente:
-```bash
+# Configurar variáveis de ambiente
 cp .env.example .env
-```
+# Edite .env e adicione suas chaves de API:
+# - OPENAI_API_KEY=sk-...
+# - ANTHROPIC_API_KEY=sk-ant-...
 
-4. Edite o arquivo `.env` e adicione sua chave da OpenAI:
-```
-OPENAI_API_KEY=sua-chave-aqui
-PORT=3000
-```
-
-## Como Usar
-
-### Desenvolvimento
-```bash
+# Iniciar servidor em desenvolvimento
 npm run dev
 ```
 
-### Produção
-```bash
-npm run build
-npm start
+## 📡 API Endpoints
+
+### POST /chat
+
+Envia uma mensagem para o assistente IA.
+
+**Body:**
+```json
+{
+  "message": "Quero agendar massagem",
+  "model": "orchestration"  // opcional
+}
 ```
 
-## Rotas Disponíveis
-
-### GET /health
-Verifica a saúde da aplicação.
-
-**Exemplo:**
-```bash
-curl http://localhost:3000/health
+**Headers:**
 ```
+Content-Type: application/json
+x-session-id: <uuid>  // opcional, para manter contexto
+```
+
+**Modelos disponíveis:**
+- `orchestration` (padrão): Sistema completo com validação de agendamento
+- `langchain` / `openai`: GPT-4o-mini via LangChain
+- `anthropic` / `claude`: Claude 3 Haiku via Anthropic
 
 **Resposta:**
 ```json
 {
-  "status": "OK",
-  "timestamp": "2025-01-13T10:30:00.000Z"
+  "message": "Ótimo! Temos massagem relaxante disponível. Prefere com qual profissional?",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "model": "orchestration"
 }
 ```
 
-### POST /chat
-Envia uma mensagem para o assistente IA. O assistente tem acesso a ferramentas para consultar informações.
+## 💡 Exemplos de Uso
 
-**Exemplos de perguntas:**
+### 1. Perguntas Informativas (QUERY)
 
-1. Listar serviços disponíveis:
+```bash
+# Listar serviços
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Quais serviços vocês têm?"}'
+
+# Verificar disponibilidade
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "A Dra Ana atende hoje?"}'
+
+# Quem faz um serviço específico
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Quem faz massagem?"}'
+```
+
+### 2. Agendamento Transacional (BOOK_SLOT)
+
+```bash
+# Iniciar agendamento
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Quero agendar massagem"}'
+# Resposta: Sistema captura "massagem" e pede profissional
+
+# Continuar conversa (use o sessionId retornado)
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -H "x-session-id: <sessionId-anterior>" \
+  -d '{"message": "Com a Dra Ana"}'
+# Resposta: Sistema valida que Ana faz massagem e pede data
+
+# Informar data
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -H "x-session-id: <sessionId-anterior>" \
+  -d '{"message": "Dia 15 de janeiro"}'
+# Resposta: Sistema verifica agenda e mostra horários disponíveis
+
+# Escolher horário
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -H "x-session-id: <sessionId-anterior>" \
+  -d '{"message": "Às 14h"}'
+# Resposta: Confirmação do agendamento completo
+```
+
+### 3. Cancelar Agendamento (CHANGE_MIND)
+
 ```bash
 curl -X POST http://localhost:3000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Quais serviços vocês oferecem?"}'
+  -H "x-session-id: <sessionId-anterior>" \
+  -d '{"message": "Cancelar"}'
+# Resposta: Estado de agendamento é limpo
 ```
 
-2. Consultar profissionais:
+### 4. Comparando Modelos
+
 ```bash
+# Teste com GPT-4o-mini (LangChain)
 curl -X POST http://localhost:3000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Quem são os barbeiros disponíveis?"}'
-```
+  -d '{"message": "Quem trabalha hoje?", "model": "langchain"}'
 
-3. Verificar disponibilidade:
-```bash
+# Teste com Claude 3 Haiku (Anthropic)
 curl -X POST http://localhost:3000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "O Carlos está disponível dia 15/01/2025?"}'
-```
+  -d '{"message": "Quem trabalha hoje?", "model": "anthropic"}'
 
-4. Buscar quem faz um serviço:
-```bash
+# Teste com Sistema Completo (Orchestration)
 curl -X POST http://localhost:3000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Quem faz massagem relaxante?"}'
+  -d '{"message": "Quero agendar com o Carlos", "model": "orchestration"}'
 ```
 
-## Ferramentas (Tools) Disponíveis
+## 🎨 Fluxo Conversacional
 
-O assistente tem acesso às seguintes ferramentas:
+### Exemplo Completo de Agendamento
 
-| Ferramenta | Descrição |
-|-----------|-----------|
-| `get_services` | Lista serviços disponíveis (pode filtrar por categoria) |
-| `get_available_professionals` | Lista profissionais (pode filtrar por especialidade ou dia) |
-| `get_professionals_services` | Mostra profissionais e seus serviços |
-| `get_specific_professional_services` | Detalhes de um profissional específico |
-| `will_be_available` | Verifica disponibilidade em uma data específica |
-| `get_services_by_professional` | Encontra profissionais que fazem um serviço |
-
-## Tecnologias Utilizadas
-
-- **Express.js**: Framework web minimalista
-- **LangChain**: Framework para aplicações com LLM
-- **TypeScript**: Superset JavaScript com tipagem estática
-- **OpenAI**: Provedor de modelos de linguagem (GPT-4o-mini)
-- **Zod**: Validação de schemas para tool calling
-
-## Tool Calling
-
-Esta aplicação implementa Tool Calling (chamada de ferramentas) usando LangChain. Isso significa que:
-
-1. O LLM pode "chamar" funções quando necessário
-2. As funções retornam dados estruturados (JSON)
-3. O LLM processa os dados e responde ao usuário de forma natural
-
-**Exemplo de fluxo:**
 ```
-Usuário: "Quais serviços de barbearia vocês têm?"
-    ↓
-LLM decide usar a ferramenta get_services com category="Barbearia"
-    ↓
-Função retorna lista de serviços de barbearia
-    ↓
-LLM formata a resposta de forma amigável
-    ↓
-Resposta: "Oferecemos corte de cabelo masculino (R$ 45, 30min) e barba completa (R$ 30, 20min)"
+User: Quero agendar massagem
+🤖: Ótimo! Temos massagem relaxante (R$ 120, 60min).
+    Profissionais disponíveis: Ana Costa (avaliação 4.8)
+    Quando você gostaria de agendar?
+
+User: Com a Ana, dia 15
+🤖: Perfeito! Dra Ana tem os seguintes horários disponíveis no dia 15/01:
+    10:00, 14:00, 16:00
+    Qual horário prefere?
+
+User: 14h
+🤖: ✅ Agendamento confirmado!
+    • Serviço: Massagem Relaxante (R$ 120)
+    • Profissional: Ana Costa
+    • Data: 15/01/2025
+    • Horário: 14:00
+
+    Está tudo certo para você?
 ```
+
+## 🔧 Estrutura do Projeto
+
+```
+src/
+├── app.ts                                  # Configuração da aplicação Express
+├── server.ts                               # Servidor HTTP
+├── config/
+│   └── tools.ts                            # Configuração de function calling
+├── controllers/
+│   ├── ChatController.ts                   # Controlador de chat (HTTP)
+│   ├── BookingValidationController.ts      # Validação de regras de negócio
+│   └── HealthController.ts                 # Health check
+├── services/
+│   ├── OrchestrationChatService.ts         # 🎯 Orquestrador principal
+│   ├── AnthropicChatService.ts             # Serviço Anthropic Claude
+│   ├── LangChainChatService.ts             # Serviço LangChain (OpenAI)
+│   ├── IntentClassifier.ts                 # Classificador de intenções
+│   └── SessionManager.ts                   # Gerenciador de sessões
+├── interfaces/
+│   └── IChatService.ts                     # Interface comum de serviços
+├── mocks/
+│   ├── data/                               # Dados mockados
+│   │   ├── professionals.ts                # Profissionais
+│   │   ├── services.ts                     # Serviços
+│   │   └── availability.ts                 # Disponibilidade
+│   └── functions/                          # Funções de negócio
+└── routes/
+    ├── chatRoutes.ts                       # Rotas de chat
+    └── healthRoutes.ts                     # Rotas de health
+```
+
+## 📊 Comparação de Modelos
+
+### GPT-4o-mini (LangChain)
+- ✅ Barato ($0.15/1M tokens input)
+- ⚠️ Function calling menos confiável
+- 📉 Taxa de erro maior em validações complexas
+
+### Claude 3 Haiku (Anthropic)
+- ✅ Melhor function calling (recomendado em `ideia.txt`)
+- ✅ Preço similar ao GPT-4o-mini
+- ✅ Mais preciso em escolha de ferramentas
+- 💰 $0.25/1M tokens input, $1.25/1M tokens output
+
+### Sistema de Orquestração
+- ✅ Separa QUERY vs BOOK_SLOT
+- ✅ Valida regras de negócio antes de responder
+- ✅ Mantém estado de agendamento
+- ✅ Sugestões inteligentes baseadas em contexto
+
+## 🧪 Desenvolvimento
+
+```bash
+# Modo desenvolvimento (hot reload)
+npm run dev
+
+# Build (nota: usa ts-node em desenvolvimento)
+npm run build
+
+# Iniciar produção
+npm start
+```
+
+## 🔐 Variáveis de Ambiente
+
+```env
+# APIs de IA
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Servidor
+PORT=3000
+```
+
+## 📝 Implementação Completa
+
+Conforme descrito em `ideia.txt`:
+
+- ✅ **Isolar módulo de IA atual**: LangChainChatService isolado
+- ✅ **Criar módulo Anthropic paralelo**: AnthropicChatService implementado
+- ✅ **Implementar controlador Node.js**: BookingValidationController criado
+- ✅ **Separar ações informativas vs transacionais**: IntentClassifier + OrchestrationChatService
+- ✅ **Sistema de estado intermediário**: SessionManager com BookingSlots
+- ⏳ Testar Claude 3 Haiku vs GPT-4o-mini (comparar taxa de erro)
+- ⏳ Adicionar persistência de agendamentos (banco de dados)
+- ⏳ Integração com WhatsApp Business API
+- ⏳ Sistema de notificações
+
+## 📄 Licença
+
+ISC
