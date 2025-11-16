@@ -7,7 +7,8 @@ export interface IChatService {
   /**
    * Processa uma mensagem e retorna a resposta do chat
    * @param message - Mensagem do usuário
+   * @param sessionId - ID da sessão (opcional) para manter contexto
    * @returns Promise com a resposta do assistente
    */
-  processMessage(message: string): Promise<string>;
+  processMessage(message: string, sessionId?: string): Promise<string>;
 }

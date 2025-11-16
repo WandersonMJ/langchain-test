@@ -10,22 +10,22 @@ import {
 } from '../mocks/functions';
 
 /**
- * Configuração das ferramentas (tools) para o LangChain
- * Cada tool tem um nome, descrição e schema de validação
- * (Single Responsibility - cada tool faz apenas uma coisa)
- */
-
-/**
- * Tool para listar serviços
- * Permite filtrar por categoria
+ * Tool para listar serviços disponíveis
+ * USO: Quando perguntarem sobre serviços, preços, duração, categorias
  */
 export const getServicesTool = new DynamicStructuredTool({
   name: 'get_services',
-  description: 'Lista todos os serviços disponíveis. Pode filtrar por categoria (Barbearia, Spa, Estética, Cabeleireiro). Use esta ferramenta quando o usuário perguntar sobre serviços disponíveis, preços ou tipos de atendimento.',
+  description: `Use SOMENTE quando o usuário perguntar sobre:
+- "Que serviços vocês têm?"
+- "Quanto custa X?"
+- "Preço de corte/barba/massagem"
+- "Serviços de barbearia/spa/estética"
+
+NÃO use para buscar profissionais ou horários.`,
   schema: z.object({
     category: z.string()
       .optional()
-      .describe('Categoria do serviço (opcional): Barbearia, Spa, Estética, Cabeleireiro')
+      .describe('Use APENAS se o usuário mencionar: Barbearia, Spa, Estética ou Cabeleireiro')
   }),
   func: async (input: { category?: string }) => {
     const result = getServices(input);
@@ -34,19 +34,26 @@ export const getServicesTool = new DynamicStructuredTool({
 });
 
 /**
- * Tool para listar profissionais disponíveis
- * Permite filtrar por especialidade e dia da semana
+ * Tool para listar profissionais
+ * USO: Quando perguntarem quem trabalha, lista de profissionais
  */
 export const getAvailableProfessionalsTool = new DynamicStructuredTool({
   name: 'get_available_professionals',
-  description: 'Lista profissionais disponíveis. Pode filtrar por especialidade (Barbearia, Spa, Estética, Cabeleireiro) ou dia da semana. Use quando o usuário perguntar sobre quem trabalha no estabelecimento ou qual profissional está disponível.',
+  description: `Use SOMENTE para perguntas tipo:
+- "Quem trabalha aí?"
+- "Que profissionais vocês têm?"
+- "Quais barbeiros/esteticistas trabalham aí?"
+- "Quem trabalha na segunda-feira?"
+
+Retorna LISTA RESUMIDA de profissionais (nome, especialidade, rating).
+NÃO use para ver serviços de um profissional específico.`,
   schema: z.object({
     specialty: z.string()
       .optional()
-      .describe('Especialidade do profissional (opcional): Barbearia, Spa, Estética, Cabeleireiro'),
+      .describe('Use SE o usuário mencionar: Barbearia, Spa, Estética ou Cabeleireiro'),
     dayOfWeek: z.string()
       .optional()
-      .describe('Dia da semana (opcional): segunda, terça, quarta, quinta, sexta, sábado, domingo')
+      .describe('Use SE o usuário mencionar dia específico: segunda, terça, quarta, quinta, sexta, sábado, domingo')
   }),
   func: async (input: { specialty?: string; dayOfWeek?: string }) => {
     const result = getAvailableProfessionals(input);
@@ -55,31 +62,28 @@ export const getAvailableProfessionalsTool = new DynamicStructuredTool({
 });
 
 /**
- * Tool para listar profissionais e seus serviços
- */
-export const getProfessionalsServicesTool = new DynamicStructuredTool({
-  name: 'get_professionals_services',
-  description: 'Retorna a lista de profissionais com os serviços que cada um oferece. Útil para descobrir o que cada profissional faz.',
-  schema: z.object({
-    professionalId: z.string()
-      .optional()
-      .describe('ID do profissional específico (opcional). Ex: prof-001')
-  }),
-  func: async (input: { professionalId?: string }) => {
-    const result = getProfessionalsServices(input);
-    return JSON.stringify(result, null, 2);
-  }
-});
-
-/**
- * Tool para ver serviços de um profissional específico
+ * Tool para ver detalhes de UM profissional específico
+ * USO: Quando perguntarem sobre um profissional por nome
  */
 export const getSpecificProfessionalServicesTool = new DynamicStructuredTool({
   name: 'get_specific_professional_services',
-  description: 'Retorna informações detalhadas sobre um profissional específico e todos os serviços que ele oferece, incluindo preços e duração.',
+  description: `Use SOMENTE quando o usuário perguntar sobre UM profissional ESPECÍFICO:
+- "O que o Carlos faz?"
+- "Quais serviços a Maria oferece?"
+- "Me fale sobre o profissional X"
+- "Quanto custa com o Carlos?"
+
+Retorna: biografia, experiência, rating, lista COMPLETA de serviços com preços.
+
+IDs disponíveis:
+- prof-001: Carlos Silva (Barbeiro)
+- prof-002: Maria Santos (Esteticista)
+- prof-003: Ana Costa (Massoterapeuta)
+- prof-004: Juliana Oliveira (Cabeleireira)
+- prof-005: Roberto Almeida (Barbeiro)`,
   schema: z.object({
     professionalId: z.string()
-      .describe('ID do profissional. Ex: prof-001, prof-002, etc.')
+      .describe('ID do profissional. Exemplos: prof-001 (Carlos), prof-002 (Maria), prof-003 (Ana), prof-004 (Juliana), prof-005 (Roberto)')
   }),
   func: async (input: { professionalId: string }) => {
     const result = getSpecificProfessionalServices(input);
@@ -88,16 +92,26 @@ export const getSpecificProfessionalServicesTool = new DynamicStructuredTool({
 });
 
 /**
- * Tool para verificar disponibilidade de um profissional
+ * Tool para verificar disponibilidade em uma DATA específica
+ * USO: Quando mencionarem data/horário
  */
 export const willBeAvailableTool = new DynamicStructuredTool({
   name: 'will_be_available',
-  description: 'Verifica se um profissional estará disponível em uma data específica e retorna os horários disponíveis. Use quando o usuário perguntar sobre disponibilidade ou quiser marcar um horário.',
+  description: `Use SOMENTE quando o usuário mencionar DATA ESPECÍFICA:
+- "O Carlos está livre no dia 15?"
+- "Que horários tem na quinta?"
+- "Disponibilidade do profissional X em DD/MM"
+- "Agenda do Carlos dia 16/01"
+
+Retorna: lista de horários disponíveis naquela data.
+Datas disponíveis: 2025-01-14 até 2025-01-18
+
+IDs: prof-001 (Carlos), prof-002 (Maria), prof-003 (Ana), prof-004 (Juliana), prof-005 (Roberto)`,
   schema: z.object({
     professionalId: z.string()
-      .describe('ID do profissional. Ex: prof-001'),
+      .describe('ID do profissional. Ex: prof-001 para Carlos Silva'),
     date: z.string()
-      .describe('Data no formato YYYY-MM-DD. Ex: 2025-01-15')
+      .describe('Data no formato YYYY-MM-DD. Exemplo: 2025-01-15. Converter datas faladas pelo usuário para este formato.')
   }),
   func: async (input: { professionalId: string; date: string }) => {
     const result = willBeAvailable(input);
@@ -106,14 +120,30 @@ export const willBeAvailableTool = new DynamicStructuredTool({
 });
 
 /**
- * Tool para encontrar profissionais que oferecem um serviço
+ * Tool para encontrar QUEM FAZ um serviço
+ * USO: Quando perguntarem quem oferece X serviço
  */
 export const getServicesByProfessionalTool = new DynamicStructuredTool({
   name: 'get_services_by_professional',
-  description: 'Encontra todos os profissionais que oferecem um serviço específico, ordenados por avaliação. Use quando o usuário quiser saber quem faz determinado serviço.',
+  description: `Use SOMENTE quando o usuário perguntar QUEM FAZ um serviço:
+- "Quem faz massagem?"
+- "Que profissional corta cabelo?"
+- "Quem oferece barba completa?"
+
+Retorna: profissionais que oferecem aquele serviço (ordenados por rating).
+
+IDs de serviços:
+- serv-001: Corte Masculino
+- serv-002: Barba Completa
+- serv-003: Massagem Relaxante
+- serv-004: Manicure
+- serv-005: Pedicure
+- serv-006: Limpeza de Pele
+- serv-007: Coloração
+- serv-008: Escova Progressiva`,
   schema: z.object({
     serviceId: z.string()
-      .describe('ID do serviço. Ex: serv-001, serv-002, etc.')
+      .describe('ID do serviço. Exemplos: serv-001 (Corte), serv-002 (Barba), serv-003 (Massagem)')
   }),
   func: async (input: { serviceId: string }) => {
     const result = getServicesByProfessional(input);
@@ -122,9 +152,34 @@ export const getServicesByProfessionalTool = new DynamicStructuredTool({
 });
 
 /**
- * Array com todas as ferramentas configuradas
- * Facilita a injeção no LangChain
+ * Tool para verificar se um profissional FAZ determinado serviço
+ * USO: Confirmar se X profissional oferece Y serviço
  */
+export const getProfessionalsServicesTool = new DynamicStructuredTool({
+  name: 'get_professionals_services',
+  description: `Use SOMENTE para CONFIRMAR se um profissional específico FAZ determinado serviço:
+- "O Carlos faz barba?" (confirmar SE oferece)
+- "A Maria faz manicure?" (verificar SE presta o serviço)
+- "O Roberto trabalha com coloração?" (checar SE tem esse serviço)
+
+NÃO use para:
+❌ Ver TODOS os serviços de um profissional → use get_specific_professional_services
+❌ Descobrir QUEM faz um serviço → use get_services_by_professional
+❌ Listar profissionais → use get_available_professionals
+
+Use COM professionalId se souber o profissional específico.
+Use SEM professionalId para ver TODOS os profissionais e seus serviços.`,
+  schema: z.object({
+    professionalId: z.string()
+      .optional()
+      .describe('ID do profissional específico (opcional). Ex: prof-001 (Carlos), prof-002 (Maria)')
+  }),
+  func: async (input: { professionalId?: string }) => {
+    const result = getProfessionalsServices(input);
+    return JSON.stringify(result, null, 2);
+  }
+});
+
 export const allTools = [
   getServicesTool,
   getAvailableProfessionalsTool,

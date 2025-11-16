@@ -14,9 +14,11 @@
   "description": "",
   "dependencies": {
     "@langchain/openai": "^1.1.0",
+    "@types/uuid": "^10.0.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "langchain": "^1.0.4",
+    "uuid": "^13.0.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

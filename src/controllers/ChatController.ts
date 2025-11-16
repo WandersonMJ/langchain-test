@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { IChatService } from '../interfaces/IChatService';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Controlador para a rota de chat
@@ -26,11 +27,20 @@ export class ChatController {
         return;
       }
 
-      // Delega o processamento para o serviço
-      const response = await this.chatService.processMessage(message);
+      // Gerenciamento de sessionId
+      let sessionId = req.headers['x-session-id'] as string;
+
+      // Se não existe sessionId, cria um novo
+      if (!sessionId) {
+        sessionId = uuidv4();
+      }
+
+      // Delega o processamento para o serviço com sessionId
+      const response = await this.chatService.processMessage(message, sessionId);
 
       res.status(200).json({
         message: response,
+        sessionId,
       });
     } catch (error) {
       console.error('Erro no ChatController:', error);
