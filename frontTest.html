@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Chat Local</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        main {
+            width: 100%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        h1 {
+            font-size: 24px;
+            color: #1c1e21;
+            border-bottom: 1px solid #dddfe2;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        #chat-window {
+            height: 400px;
+            border: 1px solid #dddfe2;
+            border-radius: 6px;
+            overflow-y: scroll;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 18px;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+        .user-message {
+            background-color: #0084ff;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        .bot-message {
+            background-color: #e4e6eb;
+            color: #050505;
+            margin-right: auto;
+            text-align: left;
+        }
+        .system-message {
+            background-color: #f5f5f5;
+            color: #8a8d91;
+            font-style: italic;
+            text-align: center;
+            font-size: 0.9em;
+            padding: 6px;
+        }
+        form {
+            display: flex;
+            gap: 10px;
+        }
+        #message-input {
+            flex-grow: 1;
+            border: 1px solid #dddfe2;
+            border-radius: 20px;
+            padding: 10px 15px;
+            font-size: 16px;
+        }
+        #chat-form button {
+            background-color: #0084ff;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 0 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #reset-button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 15px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <main>
+        <h1>Teste de Chat (API Local)</h1>
+        
+        <div id="chat-window">
+            </div>
+
+        <form id="chat-form">
+            <input type-="text" id="message-input" placeholder="Digite sua mensagem..." autocomplete="off">
+            <button type="submit">Enviar</button>
+        </form>
+
+        <button id="reset-button">Resetar Sessão</button>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatWindow = document.getElementById('chat-window');
+            const chatForm = document.getElementById('chat-form');
+            const messageInput = document.getElementById('message-input');
+            const resetButton = document.getElementById('reset-button');
+
+            // Variável para armazenar o ID da sessão atual
+            let currentSessionId = null;
+            const API_URL = 'http://localhost:3000/chat';
+
+            /**
+             * Adiciona uma mensagem na janela do chat
+             * @param {string} text - O conteúdo da mensagem
+             * @param {('user' | 'bot' | 'system')} type - O tipo de mensagem
+             */
+            function displayMessage(text, type) {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message', `${type}-message`);
+                messageDiv.textContent = text;
+                chatWindow.appendChild(messageDiv);
+                
+                // Rola para o final
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            }
+
+            // Lidar com o envio de mensagens
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const message = messageInput.value.trim();
+                if (!message) return;
+
+                // 1. Exibe a mensagem do usuário
+                displayMessage(message, 'user');
+                messageInput.value = '';
+
+                // 2. Prepara e envia a requisição para a API
+                const requestBody = {
+                    message: message
+                };
+
+                // 3. Adiciona o ID da sessão se ele existir
+                if (currentSessionId) {
+                    // O backend parece esperar 'sessionId' no corpo
+                    requestBody.sessionId = currentSessionId; 
+                }
+
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+
+                    // 4. Exibe a resposta do bot
+                    if (data.message) {
+                        displayMessage(data.message, 'bot');
+                    }
+
+                    // 5. Salva o ID da sessão retornado pela API
+                    if (data.sessionId) {
+                        currentSessionId = data.sessionId;
+                        console.log('Sessão atualizada:', currentSessionId);
+                    }
+
+                } catch (error) {
+                    console.error('Erro ao conectar com a API:', error);
+                    displayMessage(`Erro: ${error.message}. Verifique se o backend está rodando.`, 'system');
+                }
+            });
+
+            // Lidar com o botão de resetar
+            resetButton.addEventListener('click', () => {
+                currentSessionId = null;
+                chatWindow.innerHTML = '';
+                displayMessage('Sessão resetada. A próxima mensagem iniciará uma nova conversa.', 'system');
+                console.log('Sessão resetada pelo usuário.');
+            });
+
+            // Mensagem inicial
+            displayMessage('Pronto para testar. Digite uma mensagem.', 'system');
+        });
+    </script>
+
+</body>
+</html>

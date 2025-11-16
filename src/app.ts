@@ -1,4 +1,5 @@
 import express, { Express } from 'express';
+import cors from 'cors';
 import { HealthController } from './controllers/HealthController';
 import { ChatController } from './controllers/ChatController';
 import { HealthService } from './services/HealthService';
@@ -13,6 +14,7 @@ import { createChatRoutes } from './routes/chatRoutes';
  */
 export function createApp(): Express {
   const app = express();
+  app.use(cors());
 
   // Middleware para parsear JSON
   app.use(express.json());

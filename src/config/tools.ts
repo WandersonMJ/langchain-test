@@ -101,10 +101,11 @@ export const willBeAvailableTool = new DynamicStructuredTool({
 - "O Carlos está livre no dia 15?"
 - "Que horários tem na quinta?"
 - "Disponibilidade do profissional X em DD/MM"
-- "Agenda do Carlos dia 16/01"
+- "Agenda do Carlos amanhã"
+- "O Carlos trabalha hoje?"
 
 Retorna: lista de horários disponíveis naquela data.
-Datas disponíveis: 2025-01-14 até 2025-01-18
+Datas disponíveis: próximos 7 dias a partir de hoje
 
 IDs: prof-001 (Carlos), prof-002 (Maria), prof-003 (Ana), prof-004 (Juliana), prof-005 (Roberto)`,
   schema: z.object({
