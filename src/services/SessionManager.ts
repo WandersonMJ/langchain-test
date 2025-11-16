@@ -1,3 +1,5 @@
+import { BookingSlots } from '../controllers/BookingValidationController';
+
 interface SessionContext {
   sessionId: string;
   lastQuery: string;
@@ -8,6 +10,7 @@ interface SessionContext {
     content: string;
     timestamp: Date;
   }>;
+  bookingState?: BookingSlots; // Estado do agendamento em andamento
   createdAt: Date;
   lastAccess: Date;
 }
@@ -126,6 +129,42 @@ ${history}
         lastAccess: s.lastAccess,
       })),
     };
+  }
+
+  /**
+   * Obtém o estado de agendamento de uma sessão
+   */
+  getBookingState(sessionId: string): BookingSlots | undefined {
+    const session = this.sessions.get(sessionId);
+    return session?.bookingState;
+  }
+
+  /**
+   * Atualiza o estado de agendamento de uma sessão
+   */
+  setBookingState(sessionId: string, bookingState: BookingSlots): void {
+    const session = this.getOrCreateSession(sessionId);
+    session.bookingState = bookingState;
+    session.lastAccess = new Date();
+  }
+
+  /**
+   * Limpa o estado de agendamento de uma sessão
+   */
+  clearBookingState(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.bookingState = undefined;
+      session.lastAccess = new Date();
+    }
+  }
+
+  /**
+   * Verifica se há um agendamento em andamento
+   */
+  hasActiveBooking(sessionId: string): boolean {
+    const bookingState = this.getBookingState(sessionId);
+    return bookingState ? bookingState.slots_coletados.length > 0 : false;
   }
 }
 
